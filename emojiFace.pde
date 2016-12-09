@@ -1,4 +1,9 @@
 import SimpleOpenNI.*;
+import processing.video.*;
+
+
+Movie myMovie;
+
 
 
 PVector head_position = new PVector();
@@ -11,7 +16,7 @@ PVector handVec = new PVector();
 //3d models
 //ArrayList<PShape> 3dEmojis;
 PShape testEmoji;
-
+int[]   userMap;
 
 SimpleOpenNI context;
 float        zoomF =0.5f;
@@ -38,6 +43,15 @@ color[]       userClr = new color[] {
   color(0, 255, 255)
 };
 
+
+
+PImage backgroundImage;
+PImage resultImage;
+
+
+
+
+
 void setup()
 {
   size(640, 480, OPENGL);  // strange, get drawing error in the cameraFrustum if i use P3D, in opengl there is no problem
@@ -51,11 +65,12 @@ void setup()
 
   // disable mirror
   context.setMirror(false);
-
+  context.enableDepth();
 
   // enable skeleton generation for all joints
   context.enableUser();
 
+  //  context.enableUser();
   // enable ir generation
   context.enableRGB();
   stroke(255, 255, 255);
@@ -75,6 +90,12 @@ void setup()
   //  }
 
   testEmoji = loadShape("love.obj");
+  resultImage = new PImage(640, 480, RGB);
+  backgroundImage = loadImage("psychedelic.jpg");
+
+  myMovie = new Movie(this, "Psychedelic Geometry Vj Loop-HD.mp4");
+  myMovie.loop();
+  myMovie.play();
 }
 
 void draw()
@@ -89,9 +110,44 @@ void draw()
 
   translate(-600, -500, -1000);
   scale(3);
-  PImage img;
-  image(context.rgbImage(), 0, 0);
-  filter(GRAY);
+  PImage maskImage = createImage(width, height, RGB);
+
+  //  image(context.rgbImage(), 0, 0);
+
+  int[] userList = context.getUsers();
+
+  for (int i=0; i<userList.length; i++)
+  {
+
+    PImage rgbImage = context.rgbImage();
+    //pixel processing: remove background
+    //    println("checkpoint -1");
+
+
+    maskImage.loadPixels();
+
+    for (int p = 0; p < userMap.length; p++) {
+
+      if (userMap[p] != 0) {
+        // set the pixel to the color pixel
+        //          println("checkpoint 1");
+        resultImage.pixels[p] = rgbImage.pixels[p];
+        maskImage.pixels[p] = color(255);
+      } else {
+        //set it to the background
+        //          println("checkpoint 2");
+        //        resultImage.pixels[p] = backgroundImage.pixels[p];
+        maskImage.pixels[p] = color(0);
+      }
+    }
+    resultImage.updatePixels();
+    maskImage.updatePixels();
+    
+    resultImage.mask(maskImage);
+    //    resultImage.updatePixels();
+    image(myMovie, 0, 0);
+    image(resultImage, 0, 0);
+  }
   popMatrix();
 
   // set the scene pos
@@ -100,8 +156,6 @@ void draw()
   rotateY(rotY);
   scale(zoomF);
 
-  int[]   depthMap = context.depthMap();
-  int[]   userMap = context.userMap();
   int     steps   = 3;  // to speed up the drawing, draw every third point
   int     index;
   PVector realWorldPoint;
@@ -109,13 +163,15 @@ void draw()
 
   translate(0, 0, -1000);  // set the rotation center of the scene 1000 infront of the camera
 
-  // draw the pointcloud
 
 
   // draw the skeleton if it's available
-  int[] userList = context.getUsers();
+  userMap = context.userMap();
+
   for (int i=0; i<userList.length; i++)
   {
+
+
     if (context.isTrackingSkeleton(userList[i]))
       drawSkeleton(userList[i]);
 
@@ -308,5 +364,9 @@ void getBodyDirection(int userId, PVector centerPoint, PVector dir)
 
   dir.set(up.cross(left));
   dir.normalize();
+}
+
+void movieEvent(Movie m) {
+  m.read();
 }
 
