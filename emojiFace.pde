@@ -94,9 +94,9 @@ void setup()
   for (int i=0; i<theList.length-1; i++) {
     if (theList[i].contains(".obj")) {
       emojis.add(loadShape( theList[i] ));
-//      if (emojis.size()>= emojiNumber) {
-//        break;
-//      }
+      //      if (emojis.size()>= emojiNumber) {
+      //        break;
+      //      }
     }
   }
 }
@@ -104,11 +104,11 @@ void setup()
 void draw()
 {
 
-//  for (int i=0; i < kusers.size (); i++) {
-//    println(kusers.get(i).id);
-//    println(kusers.get(i).emojiIndex);
-//    println("....");
-//  }
+  //  for (int i=0; i < kusers.size (); i++) {
+  //    println(kusers.get(i).id);
+  //    println(kusers.get(i).emojiIndex);
+  //    println("....");
+  //  }
 
   // update the cam
   context.update();
@@ -120,9 +120,10 @@ void draw()
 
   translate(-600, -500, -1000);
   scale(3);
-  //  PImage maskImage = createImage(width, height, RGB);
+  PImage maskImage = createImage(width, height, RGB);
+  image(myMovie, 0, 0);
 
-  image(context.rgbImage(), 0, 0);
+  //  image(context.rgbImage(), 0, 0);
 
   int[] userList = context.getUsers();
 
@@ -133,30 +134,30 @@ void draw()
     //pixel processing: remove background
     //    println("checkpoint -1");
 
+    resultImage = rgbImage;
+    maskImage.loadPixels();
 
-    //    maskImage.loadPixels();
-    //
-    //    for (int p = 0; p < userMap.length; p++) {
-    //
-    //      if (userMap[p] != 0) {
-    //        // set the pixel to the color pixel
-    //        //          println("checkpoint 1");
-    //        resultImage.pixels[p] = rgbImage.pixels[p];
-    //        maskImage.pixels[p] = color(255);
-    //      } else {
-    //        //set it to the background
-    //        //          println("checkpoint 2");
-    //        //        resultImage.pixels[p] = backgroundImage.pixels[p];
-    //        maskImage.pixels[p] = color(0);
-    //      }
-    //    }
+    for (int p = 0; p < userMap.length; p++) {
+
+      if (userMap[p] != 0) {
+        // set the pixel to the color pixel
+        //          println("checkpoint 1");
+//        resultImage.pixels[p] = rgbImage.pixels[p];
+        maskImage.pixels[p] = color(255);
+      } else {
+        //set it to the background
+        //          println("checkpoint 2");
+        //        resultImage.pixels[p] = backgroundImage.pixels[p];
+        maskImage.pixels[p] = color(0);
+      }
+    }
     //    resultImage.updatePixels();
     //    maskImage.updatePixels();
-    //
-    //    resultImage.mask(maskImage);
-    //    //    resultImage.updatePixels();
-    //    image(myMovie, 0, 0);
-    //    image(resultImage, 0, 0);
+
+    resultImage.mask(maskImage);
+    //    resultImage.updatePixels();
+
+    image(resultImage, 0, 0);
   }
   popMatrix();
 
