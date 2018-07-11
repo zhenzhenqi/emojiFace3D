@@ -1,10 +1,7 @@
 import SimpleOpenNI.*;
 import processing.video.*;
 
-
 Movie myMovie;
-
-
 
 PVector head_position = new PVector();
 PVector Shoulder_left_jointPos = new PVector();
@@ -17,7 +14,7 @@ PVector handVec = new PVector();
 //ArrayList<PShape> 3dEmojis;
 PShape testEmoji;
 int[]   userMap;
-
+int emojiNumber = 10;
 SimpleOpenNI context;
 float        zoomF =0.5f;
 float        rotX = radians(180);  // by default rotate the hole scene 180deg around the x-axis, 
@@ -31,7 +28,6 @@ PVector      com = new PVector();
 PVector      com2d = new PVector();   
 
 float camera_adjust_x, camera_adjust_y, camera_adjust_scale;
-
 
 
 color[]       userClr = new color[] { 
@@ -48,7 +44,8 @@ color[]       userClr = new color[] {
 PImage backgroundImage;
 PImage resultImage;
 
-
+ArrayList<PShape> emojis = new ArrayList<PShape>();
+ArrayList<KinectUser> kusers = new ArrayList<KinectUser>();
 
 
 
@@ -80,15 +77,6 @@ void setup()
   10, 150000);
 
 
-
-  //  3dEmojis = new ArrayList<PShape>();
-  //  String path = sketchPath("emojis/");
-  //  File theDir = new File(path);
-  //  String[] theList = theDir.list();
-  //  for(int i=0; i < theList.length; i++){
-  //  
-  //  }
-
   testEmoji = loadShape("love.obj");
   resultImage = new PImage(640, 480, RGB);
   backgroundImage = loadImage("psychedelic.jpg");
@@ -96,10 +84,32 @@ void setup()
   myMovie = new Movie(this, "Psychedelic Geometry Vj Loop-HD.mp4");
   myMovie.loop();
   myMovie.play();
+
+
+  String path = sketchPath("data/");
+  File theDir = new File(path);
+  String[] theList = theDir.list();
+  int fileCount = theList.length;
+
+  for (int i=0; i<theList.length-1; i++) {
+    if (theList[i].contains(".obj")) {
+      emojis.add(loadShape( theList[i] ));
+      //      if (emojis.size()>= emojiNumber) {
+      //        break;
+      //      }
+    }
+  }
 }
 
 void draw()
 {
+
+  //  for (int i=0; i < kusers.size (); i++) {
+  //    println(kusers.get(i).id);
+  //    println(kusers.get(i).emojiIndex);
+  //    println("....");
+  //  }
+
   // update the cam
   context.update();
   PVector myPositionScreenCoords  = new PVector(); //storage device
@@ -111,6 +121,7 @@ void draw()
   translate(-600, -500, -1000);
   scale(3);
   PImage maskImage = createImage(width, height, RGB);
+  image(myMovie, 0, 0);
 
   //  image(context.rgbImage(), 0, 0);
 
@@ -123,7 +134,7 @@ void draw()
     //pixel processing: remove background
     //    println("checkpoint -1");
 
-
+    resultImage = rgbImage;
     maskImage.loadPixels();
 
     for (int p = 0; p < userMap.length; p++) {
@@ -131,7 +142,7 @@ void draw()
       if (userMap[p] != 0) {
         // set the pixel to the color pixel
         //          println("checkpoint 1");
-        resultImage.pixels[p] = rgbImage.pixels[p];
+//        resultImage.pixels[p] = rgbImage.pixels[p];
         maskImage.pixels[p] = color(255);
       } else {
         //set it to the background
@@ -140,12 +151,12 @@ void draw()
         maskImage.pixels[p] = color(0);
       }
     }
-    resultImage.updatePixels();
-    maskImage.updatePixels();
-    
+    //    resultImage.updatePixels();
+    //    maskImage.updatePixels();
+
     resultImage.mask(maskImage);
     //    resultImage.updatePixels();
-    image(myMovie, 0, 0);
+
     image(resultImage, 0, 0);
   }
   popMatrix();
@@ -156,7 +167,7 @@ void draw()
   rotateY(rotY);
   scale(zoomF);
 
-  int     steps   = 3;  // to speed up the drawing, draw every third point
+  int     steps = 3;  // to speed up the drawing, draw every third point
   int     index;
   PVector realWorldPoint;
 
@@ -170,7 +181,6 @@ void draw()
 
   for (int i=0; i<userList.length; i++)
   {
-
 
     if (context.isTrackingSkeleton(userList[i]))
       drawSkeleton(userList[i]);
@@ -193,10 +203,22 @@ void draw()
     stroke(200);
     strokeWeight(1);
     stroke(0, 0);
-    lights();
+
+    directionalLight(200, 200, 200, 0.5, -0.5, 1);
+
+    //    pointLight(200, 200, 200, width/2, 2000, 1500);
+    //    lights();
+    ambientLight(100, 100, 100);
+
     if (userList.length != 0 && head_position.z != 0) {
-      scale(200);
-      shape(testEmoji);
+      scale(210);
+      for (int po =0; po < kusers.size (); po ++) {
+
+        if (kusers.get(po).id == i+1) {
+          //          println("confirm");
+          shape(emojis.get(kusers.get(po).emojiIndex));
+        }
+      }
     }
 
     popMatrix();
@@ -231,8 +253,6 @@ void drawSkeleton(int userId)
   drawLimb(userId, SimpleOpenNI.SKEL_TORSO, SimpleOpenNI.SKEL_RIGHT_HIP);
   drawLimb(userId, SimpleOpenNI.SKEL_RIGHT_HIP, SimpleOpenNI.SKEL_RIGHT_KNEE);
   drawLimb(userId, SimpleOpenNI.SKEL_RIGHT_KNEE, SimpleOpenNI.SKEL_RIGHT_FOOT);  
-
-
 
   // draw body direction
   getBodyDirection(userId, bodyCenter, bodyDir);
@@ -328,12 +348,17 @@ void onNewUser(SimpleOpenNI curContext, int userId)
 {
   println("onNewUser - userId: " + userId);
   println("\tstart tracking skeleton");
-
+  kusers.add(new KinectUser(userId, floor(random(0, emojis.size()))));
   context.startTrackingSkeleton(userId);
 }
 
 void onLostUser(SimpleOpenNI curContext, int userId)
 {
+  for (int i=0; i<kusers.size (); i++) {
+    if (kusers.get(i).id == userId) {
+      kusers.remove(i);
+    }
+  }
   println("onLostUser - userId: " + userId);
 }
 
