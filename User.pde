@@ -8,4 +8,3 @@ class KinectUser {
     emojiIndex = _emojiIndex;
   }
 }
-
