@@ -1,216 +1,190 @@
+import controlP5.*;
+import peasy.*;
 import SimpleOpenNI.*;
 import processing.video.*;
 
-
-Movie myMovie;
-
-
-
-PVector head_position = new PVector();
-PVector Shoulder_left_jointPos = new PVector();
-PVector Shoulder_right_jointPos = new PVector();
-PVector neck_jointPos = new PVector();
-boolean handsTrackFlag = false; 
-PVector handVec = new PVector();
-
-//3d models
-//ArrayList<PShape> 3dEmojis;
-PShape testEmoji;
-int[]   userMap;
+static int EMOJI_COUNT = 3;
 
 SimpleOpenNI context;
-float        zoomF =0.5f;
-float        rotX = radians(180);  // by default rotate the hole scene 180deg around the x-axis, 
+Movie myMovie;
+ControlP5 cp5;
+
+ArrayList < PShape > emojis = new ArrayList < PShape > ();
+ArrayList < KinectUser > kusers = new ArrayList < KinectUser > ();
+PVector headPosition = new PVector();
+PVector shoulderLeftJointPos = new PVector();
+PVector shoulderRightJointPos = new PVector();
+PVector neckPos = new PVector();
+
+int[] userMap;
+
+float zoomF = 0.5f;
+float rotX = radians(180); // by default rotate the hole scene 180deg around the x-axis, 
 // the data from openni comes upside down
-float        rotY = radians(0);
-boolean      autoCalib=true;
+float rotY = radians(0);
 
-PVector      bodyCenter = new PVector();
-PVector      bodyDir = new PVector();
-PVector      com = new PVector();                                   
-PVector      com2d = new PVector();   
+PVector bodyCenter = new PVector();
+PVector bodyDir = new PVector();
+PVector com = new PVector();
+PVector com2d = new PVector();
 
-float camera_adjust_x, camera_adjust_y, camera_adjust_scale;
+float camera_adjust_x;
+float camera_adjust_y;
+float camera_adjust_scale;
 
-
-
-color[]       userClr = new color[] { 
-  color(255, 0, 0), 
-  color(0, 255, 0), 
-  color(0, 0, 255), 
-  color(255, 255, 0), 
-  color(255, 0, 255), 
-  color(0, 255, 255)
-};
+// tested values: make depth map and rgb image match
+// for background removal stuff
+float color_scaler = 0.67;
+float depth_scaler = 1.88;
+float depth_offset_x = 195.8;
+float depth_offset_y = -31;
 
 
+float user_draw_x_offset=0;
 
-PImage backgroundImage;
-PImage resultImage;
+PeasyCam cam;
 
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+/////////////////////  S E T U P ///////////////////////////////////////
+////////////////////////////////////////////////////////////
 
+void setup() {
+  size(1280, 720, P3D); 
+  //cam = new PeasyCam(this, 100);
 
+  //controlp5
+  cp5 = new ControlP5(this);
+  //cp5.setAutoDraw(false);
+  cp5.addSlider("user_draw_x_offset").setRange(-500, 500).setSize(900, 10).linebreak();
+  //cp5.addSlider("
 
-
-void setup()
-{
-  size(640, 480, OPENGL);  // strange, get drawing error in the cameraFrustum if i use P3D, in opengl there is no problem
   context = new SimpleOpenNI(this);
-  if (context.isInit() == false)
-  {
-    println("Can't init SimpleOpenNI, maybe the camera is not connected!"); 
+  if (context.isInit() == false) {
+    println("Can't init SimpleOpenNI, maybe the camera is not connected!");
     exit();
     return;
   }
 
-  // disable mirror
   context.setMirror(false);
   context.enableDepth();
-
-  // enable skeleton generation for all joints
   context.enableUser();
-
-  //  context.enableUser();
-  // enable ir generation
   context.enableRGB();
-  stroke(255, 255, 255);
-  smooth();  
-  perspective(radians(45), 
-  float(width)/float(height), 
-  10, 150000);
+  perspective(radians(45), float(width) / float(height), 10, 150000);
 
-
-
-  //  3dEmojis = new ArrayList<PShape>();
-  //  String path = sketchPath("emojis/");
-  //  File theDir = new File(path);
-  //  String[] theList = theDir.list();
-  //  for(int i=0; i < theList.length; i++){
-  //  
-  //  }
-
-  testEmoji = loadShape("love.obj");
-  resultImage = new PImage(640, 480, RGB);
-  backgroundImage = loadImage("psychedelic.jpg");
+  // maskedRGB = new PImage(640, 480, RGB);
 
   myMovie = new Movie(this, "Psychedelic Geometry Vj Loop-HD.mp4");
   myMovie.loop();
-  myMovie.play();
+  //myMovie.play();
+
+  //load emoji obj
+  println("start loading emoji obj");
+  String path = sketchPath("data/");
+  File theDir = new File(path);
+  String[] theList = theDir.list();
+  for (int i = 0; i < theList.length - 1; i++) {
+    if (theList[i].contains(".obj")) {
+      emojis.add(loadShape(theList[i]));
+      if (emojis.size() > EMOJI_COUNT) {
+        break;
+      }
+      println("loaded " + i );
+    }
+  }
+  println("finish loading obj files");
 }
 
-void draw()
-{
-  // update the cam
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+//////////////////////// D R A W ////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+void draw() {
+  background(255);
+
+  //beginCamera();
+  //camera();
+
+  //setup lighting for better 3d model viewing
+  directionalLight(200, 200, 200, 0.5, -0.5, 1);
+  ambientLight(100, 100, 100);
+
+  ////////////////////////////////////////////////////////////
+  ////////////////////// background removal stuff ////////////////////////////////////////////
+
+
+  //update kinect data
   context.update();
-  PVector myPositionScreenCoords  = new PVector(); //storage device
-  //convert the weird kinect coordinates to screen coordinates.
-  context.convertRealWorldToProjective(handVec, myPositionScreenCoords);
-  background(0, 0, 0);
+  //get usermap for background removal
+  userMap = context.userMap();
+  //draw movie 
+  image(myMovie, 0, 0);
+  PImage noBgImg =  backgroundRemoval(context.userMap(), context.rgbImage().get());
+  //draw user without background
+  
+  //todo: adjust   user_draw_x_offset   to match 3d models
+  image(noBgImg, user_draw_x_offset, 0);
+
+
+  ////////////////////////////////////////////////////////////
+  ///////////////////////  draw 3d models /////////////////////////////////////
+
+  //hack coordinates to match screen views
+
   pushMatrix();
-
-  translate(-600, -500, -1000);
-  scale(3);
-  PImage maskImage = createImage(width, height, RGB);
-
-  //  image(context.rgbImage(), 0, 0);
-
-  int[] userList = context.getUsers();
-
-  for (int i=0; i<userList.length; i++)
-  {
-
-    PImage rgbImage = context.rgbImage();
-    //pixel processing: remove background
-    //    println("checkpoint -1");
-
-
-    maskImage.loadPixels();
-
-    for (int p = 0; p < userMap.length; p++) {
-
-      if (userMap[p] != 0) {
-        // set the pixel to the color pixel
-        //          println("checkpoint 1");
-        resultImage.pixels[p] = rgbImage.pixels[p];
-        maskImage.pixels[p] = color(255);
-      } else {
-        //set it to the background
-        //          println("checkpoint 2");
-        //        resultImage.pixels[p] = backgroundImage.pixels[p];
-        maskImage.pixels[p] = color(0);
-      }
-    }
-    resultImage.updatePixels();
-    maskImage.updatePixels();
-    
-    resultImage.mask(maskImage);
-    //    resultImage.updatePixels();
-    image(myMovie, 0, 0);
-    image(resultImage, 0, 0);
-  }
-  popMatrix();
-
-  // set the scene pos
-  translate(width/2, height/2, 0);
+  pushStyle();
+  translate(width / 2, height / 2, 0);
   rotateX(rotX);
   rotateY(rotY);
   scale(zoomF);
-
-  int     steps   = 3;  // to speed up the drawing, draw every third point
-  int     index;
-  PVector realWorldPoint;
+  translate(0, 0, -1000); 
 
 
-  translate(0, 0, -1000);  // set the rotation center of the scene 1000 infront of the camera
+  int[] userList = context.getUsers();
+  for (int i = 0; i < userList.length; i++) {
 
+    drawSkeleton(i);
 
-
-  // draw the skeleton if it's available
-  userMap = context.userMap();
-
-  for (int i=0; i<userList.length; i++)
-  {
-
-
-    if (context.isTrackingSkeleton(userList[i]))
-      drawSkeleton(userList[i]);
-
-
-    float confident;
-    confident = context.getJointPositionSkeleton(userList[i], 
-    SimpleOpenNI.SKEL_HEAD, head_position);
-    confident = context.getJointPositionSkeleton(userList[i], 
-    SimpleOpenNI.SKEL_LEFT_SHOULDER, Shoulder_left_jointPos);
-    confident = context.getJointPositionSkeleton(userList[i], 
-    SimpleOpenNI.SKEL_RIGHT_SHOULDER, Shoulder_right_jointPos);
-    confident = context.getJointPositionSkeleton(userList[i], 
-    SimpleOpenNI.SKEL_NECK, neck_jointPos);    
+    context.getJointPositionSkeleton(userList[i], SimpleOpenNI.SKEL_HEAD, headPosition);
+    context.getJointPositionSkeleton(userList[i], SimpleOpenNI.SKEL_LEFT_SHOULDER, shoulderLeftJointPos);
+    context.getJointPositionSkeleton(userList[i], SimpleOpenNI.SKEL_RIGHT_SHOULDER, shoulderRightJointPos);
+    context.getJointPositionSkeleton(userList[i], SimpleOpenNI.SKEL_NECK, neckPos);
 
     pushMatrix();
-    translate(head_position.x, head_position.y, head_position.z);
-    rotateY(((PI/2) * (Shoulder_left_jointPos.z - Shoulder_right_jointPos.z))/200);
+
+    translate(headPosition.x, headPosition.y, headPosition.z);
+    rotateY(((PI / 2) * (shoulderLeftJointPos.z - shoulderRightJointPos.z)) / 200);
     fill(0, 235);
     stroke(200);
     strokeWeight(1);
     stroke(0, 0);
-    lights();
-    if (userList.length != 0 && head_position.z != 0) {
-      scale(200);
-      shape(testEmoji);
+    hint(DISABLE_DEPTH_TEST);
+    if (userList.length != 0 && headPosition.z != 0) {
+      scale(210);
+      for (int po = 0; po < kusers.size(); po++) {
+        if (kusers.get(po).id == i + 1) {
+          shape(emojis.get(kusers.get(po).emojiIndex));
+          //box(1);
+        }
+      }
     }
-
+    hint(ENABLE_DEPTH_TEST);
     popMatrix();
   }
+
+  popStyle();
+  popMatrix();
+
+  //endCamera();
 }
 
 
 
 
 // draw the skeleton with the selected joints
-void drawSkeleton(int userId)
-{
+void drawSkeleton(int userId) {
   strokeWeight(3);
-
   // to get the 3d joint data
   drawLimb(userId, SimpleOpenNI.SKEL_HEAD, SimpleOpenNI.SKEL_NECK);
   drawLimb(userId, SimpleOpenNI.SKEL_NECK, SimpleOpenNI.SKEL_LEFT_SHOULDER);
@@ -230,92 +204,11 @@ void drawSkeleton(int userId)
 
   drawLimb(userId, SimpleOpenNI.SKEL_TORSO, SimpleOpenNI.SKEL_RIGHT_HIP);
   drawLimb(userId, SimpleOpenNI.SKEL_RIGHT_HIP, SimpleOpenNI.SKEL_RIGHT_KNEE);
-  drawLimb(userId, SimpleOpenNI.SKEL_RIGHT_KNEE, SimpleOpenNI.SKEL_RIGHT_FOOT);  
-
-
-
+  drawLimb(userId, SimpleOpenNI.SKEL_RIGHT_KNEE, SimpleOpenNI.SKEL_RIGHT_FOOT);
   // draw body direction
-  getBodyDirection(userId, bodyCenter, bodyDir);
-  bodyDir.mult(200);  // 200mm length
-  bodyDir.add(bodyCenter);
-  strokeWeight(1);
-}
-
-void drawLimb(int userId, int jointType1, int jointType2)
-{
-  PVector jointPos1 = new PVector();
-  PVector jointPos2 = new PVector();
-  float  confidence;
-
-
-
-  // draw the joint position
-  confidence = context.getJointPositionSkeleton(userId, jointType1, jointPos1);
-  confidence = context.getJointPositionSkeleton(userId, jointType2, jointPos2);
-
-  //pass the positions to our cubes' PVectors
-
-
-  if (jointType1 == SimpleOpenNI.SKEL_LEFT_SHOULDER) {
-    Shoulder_left_jointPos = jointPos1;
-  }
-
-  if (jointType1 == SimpleOpenNI.SKEL_RIGHT_SHOULDER) {
-    Shoulder_right_jointPos = jointPos1;
-  }
-
-  if (jointType1 == SimpleOpenNI.SKEL_HEAD) {
-    head_position = jointPos1;
-  }
-
-
-  stroke(255, 0, 0, confidence * 200 + 55);
-  stroke(0, 0);
-  line(jointPos1.x, jointPos1.y, jointPos1.z, 
-  jointPos2.x, jointPos2.y, jointPos2.z);
-
-  drawJointOrientation(userId, jointType1, jointPos1, 50);
-}
-
-
-
-void drawJointOrientation(int userId, int jointType, PVector pos, float length)
-{
-  // draw the joint orientation  
-  PMatrix3D  orientation = new PMatrix3D();
-  float confidence = context.getJointOrientationSkeleton(userId, jointType, orientation);
-  if (confidence < 0.001f) 
-    // nothing to draw, orientation data is useless
-    return;
-
-  pushMatrix();
-  translate(pos.x, pos.y, pos.z);
-
-  // set the local coordsys
-  applyMatrix(orientation);
-
-  // coordsys lines are 100mm long
-  // x - r
-
-
-  stroke(255, 0, 0, confidence * 200 + 55);
-  stroke(0, 0);
-  line(0, 0, 0, 
-  length, 0, 0);
-  // y - g
-
-
-  stroke(0, 255, 0, confidence * 200 + 55);
-  stroke(0, 0);
-  line(0, 0, 0, 
-  0, length, 0);
-  // z - b    
-
-  stroke(0, 0, 255, confidence * 200 + 55);
-  stroke(0, 0);
-  line(0, 0, 0, 
-  0, 0, length);
-  popMatrix();
+  //getBodyDirection(userId, bodyCenter, bodyDir);
+  //bodyDir.mult(200); // 200mm length
+  //bodyDir.add(bodyCenter);
 }
 
 // -----------------------------------------------------------------
@@ -324,31 +217,33 @@ void drawJointOrientation(int userId, int jointType, PVector pos, float length)
 
 
 
-void onNewUser(SimpleOpenNI curContext, int userId)
-{
+void onNewUser(SimpleOpenNI curContext, int userId) {
   println("onNewUser - userId: " + userId);
   println("\tstart tracking skeleton");
 
   context.startTrackingSkeleton(userId);
 }
 
-void onLostUser(SimpleOpenNI curContext, int userId)
-{
+void onLostUser(SimpleOpenNI curContext, int userId) {
+  for (int i = 0; i < kusers.size(); i++) {
+    if (kusers.get(i).id == userId) {
+      kusers.remove(i);
+    }
+  }
   println("onLostUser - userId: " + userId);
 }
 
-void onVisibleUser(SimpleOpenNI curContext, int userId)
-{
+void onVisibleUser(SimpleOpenNI curContext, int userId) {
   //println("onVisibleUser - userId: " + userId);
+  kusers.add(new KinectUser(userId, floor(random(0, emojis.size()))));
 }
 
 
-void getBodyDirection(int userId, PVector centerPoint, PVector dir)
-{
+void getBodyDirection(int userId, PVector centerPoint, PVector dir) {
   PVector jointL = new PVector();
   PVector jointH = new PVector();
   PVector jointR = new PVector();
-  float  confidence;
+  float confidence;
 
   // draw the joint position
   confidence = context.getJointPositionSkeleton(userId, SimpleOpenNI.SKEL_LEFT_SHOULDER, jointL);
@@ -366,7 +261,9 @@ void getBodyDirection(int userId, PVector centerPoint, PVector dir)
   dir.normalize();
 }
 
+void keyPressed() {
+}
+
 void movieEvent(Movie m) {
   m.read();
 }
-
